@@ -2,9 +2,39 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Description: ECS Infrastructure Interview Template 1
 
+Transform: AWS::Serverless-2016-10-31
+
 Parameters:
 
+  pArtifactS3BucketName:
+    Description: S3 Bucket Name for source-code S3 bucket.
+    Type: String
+
+  pArtifactS3Key:
+    Description: Key for the source-code zipfile in the Artifact S3 Bucket.
+    Type: String
+
+  pFunctionAliasName:
+    Description: Lambda function alias name
+    Type: String
+
+  pSSMPrefix:
+    Description: SSM Parameter name prefix
+    Type: String
+
+  pLogLevel:
+    Description: Logging verbosity level
+    Type: String
+    Default: INFO
+    AllowedValues:
+      - CRITICAL
+      - ERROR
+      - DEBUG 
+      - WARNING
+      - INFO
+
 Resources:
+
   rLambdaFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -17,38 +47,47 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - sts:AssumeRole
-      Name: lambda-function-role
       Path: /
       Policies:
-        - PolicyName: allow-ec2
+        - PolicyName: allow-cloudwatch-logging
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               Action:
-                - ec2:*
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
               Effect: Allow
               Resource: '*'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
-        - arn:aws:iam::aws:policy/AmazonGlacierFullAccess
 
   rLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: lambda.lambda_handler
+      Handler: lambda.handler
       Environment:
         Variables:
           LOG_LEVEL: !Ref pLogLevel
       CodeUri:
         Bucket: !Ref pArtifactS3BucketName
         Key: !Ref pArtifactS3Key
-      Role: !Ref rLambdaFunctionRole
+      Role: !GetAtt rLambdaFunctionRole.Arn
+      AutoPublishAlias: !Ref pFunctionAliasName
       DeploymentPreference:
         Type: AllAtOnce
-      Alarms:
-        - !Ref rLambdaFunctionAliasErrorAlarm
-        - !Ref rLambdaFunctionVersionErrorAlarm
-    ​
+        Alarms:
+          - !Ref rLambdaFunctionAliasErrorAlarm
+          - !Ref rLambdaFunctionVersionErrorAlarm
+      Runtime: python3.7
+      Timeout: 5
+
+  rLambdaArnSSMParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: !Sub '${AWS::StackName} Lambda Arn'
+      Name: !Sub '/${pSSMPrefix}/LambdaArn'
+      Type: String
+      Value: !GetAtt rLambdaFunction.Arn
+
   rLambdaFunctionAliasErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -65,7 +104,7 @@ Resources:
       Period: 300
       Statistic: Sum
       Threshold: 0
-    ​
+
   rLambdaFunctionVersionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -84,3 +123,11 @@ Resources:
       Threshold: 0
 
 Outputs:
+
+  LambdaFunction:
+    Description: Arn of the Lambda Function
+    Value: !Ref rLambdaFunction.Alias
+
+  LambdaFunctionSSMParameter:
+    Description: SSM Parameter of the Lambda Function Arn
+    Value: !Ref rLambdaArnSSMParameter
