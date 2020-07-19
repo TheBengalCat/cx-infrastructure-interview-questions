@@ -131,3 +131,7 @@ Outputs:
   LambdaFunctionSSMParameter:
     Description: SSM Parameter of the Lambda Function Arn
     Value: !Ref rLambdaArnSSMParameter
+
+  LambdaFunctionRoleArn:
+    Description: Arn of the Role used by the Lambda Function
+    Value: !GetAtt rLambdaFunctionRole.Arn
