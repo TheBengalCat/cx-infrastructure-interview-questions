@@ -1,0 +1,23 @@
+Scenario-3 Diagram Explaination. 
+
+This is an ideal AWS Native CICD deployment architecture that alows for multi-account deployment. 
+
+
+The architecture starts with the Developer; A Developer may push a change to a git repository, I've opeted for AWS CodeCommit, and a the change would then be merged via pull request into the master branch of the repository.
+
+The merge into the master branch would be picked up by CodeBuild, where scripts can be run to do some pre-checks on code and validation of CloudFormation templates - these scripts are provided by a buildspec.yml file located within the project directory.
+
+Any code would be processed and zipped into deployment packages and templates are packaged. These are stored in the Build Artifacts S3 Bucket where they're picked up by CloudFormation. 
+
+This step requires IAM Roles within each of the staging environments that will be deployed to. CloudFormation will need to assume a role in each environment to create and execute change sets. These roles should adhere to the principle of least privilege and only allow CloudFormation to create the resources necessary for your application deployments.
+
+The administration of the deployments is all controlled within the account that the CodePipeline is based.
+Config files can be provided in the project directory to populate template parameters for each environment. 
+
+CloudFormation will create a change-set in the first environment, pause for review and can be either approved or rejected by a user with those permissions. 
+If rejected, the change-set will not be executed and a new change will need to be pushed through.
+If approved, CloudFormation will execute the change-set and begin to build the application into the first environment. If successful, the process will continue and a change -set will be created in the next environment. Upon failure to execute the change-set, the update is rolled back and the CodePipeline is stopped. A new change will need to be pushed through the Pipeline to fix the error and to progress through the staging environments. 
+
+I have chosen not to include CodeDeploy as a part of the architectural diagram here, for the reason that by using Serverless Transform in CloudFormation, the serverless application comes built-in with CodeDeploy and your gradual deployments can be configured within CloudFormation. 
+
+The same steps are then repeated for each of the staging environments that are specified. 
